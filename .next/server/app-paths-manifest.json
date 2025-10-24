@@ -1,0 +1,9 @@
+{
+  "/dashboard/page": "app/dashboard/page.js",
+  "/chatagent/page": "app/chatagent/page.js",
+  "/chatagent/[id]/channels/page": "app/chatagent/[id]/channels/page.js",
+  "/chatagent/[id]/tools/page": "app/chatagent/[id]/tools/page.js",
+  "/chatagent/[id]/knowledgebase/page": "app/chatagent/[id]/knowledgebase/page.js",
+  "/chatagent/[id]/profile/page": "app/chatagent/[id]/profile/page.js",
+  "/chatagent/[id]/page": "app/chatagent/[id]/page.js"
+}
