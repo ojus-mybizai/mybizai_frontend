@@ -23,11 +23,20 @@ export default function AgentCard({
   onToggleActive,
   viewMode = 'grid'
 }: AgentCardProps) {
-  const getEnabledChannels = (channels: Record<string, boolean> | null | undefined) => {
-    if (!channels) return []
-    return Object.entries(channels)
-      .filter(([_, enabled]) => enabled)
-      .map(([key, _]) => key)
+  const getEnabledChannels = (channels: Array<{
+    id: number
+    type: string
+    name: string
+    config: Record<string, any>
+    is_connected: boolean
+    business_id: number
+    created_at: string
+    updated_at: string
+  }> | undefined) => {
+    if (!channels || !Array.isArray(channels)) return []
+    return channels
+      .filter(channel => channel.is_connected)
+      .map(channel => channel.type)
   }
 
   const getChannelIcon = (channel: string) => {
@@ -54,7 +63,6 @@ export default function AgentCard({
     if (diffInDays < 7) return `${diffInDays}d ago`
     return date.toLocaleDateString()
   }
-
   const enabledChannels = getEnabledChannels(agent.channels)
 
   if (viewMode === 'list') {
@@ -80,7 +88,7 @@ export default function AgentCard({
                     {agent.is_active ? 'Active' : 'Inactive'}
                   </span>
                 </div>
-                <p className="text-sm text-gray-600 dark:text-gray-400 capitalize">{agent.role}</p>
+                <p className="text-sm text-gray-600 dark:text-gray-400 capitalize">{agent.role_type}</p>
                 {agent.description && (
                   <p className="text-sm text-gray-500 dark:text-gray-400 truncate mt-1">{agent.description}</p>
                 )}
@@ -190,7 +198,7 @@ export default function AgentCard({
                   {agent.is_active ? <Power className="w-4 h-4" /> : <PowerOff className="w-4 h-4" />}
                 </button>
               </div>
-              <p className="text-sm text-gray-600 dark:text-gray-400 capitalize">{agent.role}</p>
+              <p className="text-sm text-gray-600 dark:text-gray-400 capitalize">{agent.role_type}</p>
             </div>
           </div>
           

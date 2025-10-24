@@ -5,6 +5,7 @@ import { Lead } from '../api'
 
 interface LeadState {
   leads: Lead[]
+  currentLead: Lead | null
   isLoading: boolean
   pagination: {
     page: number
@@ -15,6 +16,7 @@ interface LeadState {
 
   // Actions
   setLeads: (leads: Lead[], pagination?: { total: number; page: number; per_page: number; total_pages?: number }) => void
+  setCurrentLead: (lead: Lead | null) => void
   addLead: (lead: Lead) => void
   updateLead: (id: number, lead: Lead) => void
   removeLead: (id: number) => void
@@ -27,6 +29,7 @@ export const useLeadStore = create<LeadState>()(
   persist(
     subscribeWithSelector((set, get) => ({
       leads: [],
+      currentLead: null,
       isLoading: false,
       pagination: {
         page: 1,
@@ -43,6 +46,10 @@ export const useLeadStore = create<LeadState>()(
         }
       },
 
+      setCurrentLead: (lead: Lead | null) => {
+        set({ currentLead: lead })
+      },
+
       addLead: (lead: Lead) => {
         set((state) => ({
           leads: [...state.leads, lead]
@@ -53,13 +60,15 @@ export const useLeadStore = create<LeadState>()(
         set((state) => ({
           leads: state.leads.map(lead =>
             lead.id === id ? updatedLead : lead
-          )
+          ),
+          currentLead: state.currentLead?.id === id ? updatedLead : state.currentLead
         }))
       },
 
       removeLead: (id: number) => {
         set((state) => ({
-          leads: state.leads.filter(lead => lead.id !== id)
+          leads: state.leads.filter(lead => lead.id !== id),
+          currentLead: state.currentLead?.id === id ? null : state.currentLead
         }))
       },
 
@@ -74,6 +83,7 @@ export const useLeadStore = create<LeadState>()(
       clearLeads: () => {
         set({
           leads: [],
+          currentLead: null,
           isLoading: false,
           pagination: {
             page: 1,
@@ -88,6 +98,7 @@ export const useLeadStore = create<LeadState>()(
       name: 'lead-storage',
       partialize: (state) => ({
         leads: state.leads,
+        currentLead: state.currentLead,
         pagination: state.pagination,
       }),
     }

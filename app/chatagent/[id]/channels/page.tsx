@@ -127,15 +127,13 @@ export default function AgentChannelsPage() {
     try {
       setDeletingChannelId(channelId)
 
-      const response = await channelsApi.deleteChannel(channelId, token)
+      await channelsApi.deleteChannel(channelId, token)
 
-      if (response.success) {
-        // Remove the channel from the local state
-        setChannels(prev => prev.filter(channel => channel.id !== channelId))
-        // Remove from selected channels if it was selected
-        setSelectedChannelIds(prev => prev.filter(id => id !== channelId))
-        alert('Channel deleted successfully!')
-      }
+      // Remove the channel from the local state
+      setChannels(prev => prev.filter(channel => channel.id !== channelId))
+      // Remove from selected channels if it was selected
+      setSelectedChannelIds(prev => prev.filter(id => id !== channelId))
+      alert('Channel deleted successfully!')
     } catch (error) {
       console.error('Failed to delete channel:', error)
       alert('Failed to delete channel. Please try again.')

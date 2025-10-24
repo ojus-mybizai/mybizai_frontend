@@ -26,7 +26,7 @@ export default function BulkUploadPage() {
       // Refresh catalog items after successful upload
       if (result.success_count > 0) {
         const catalogItems = await authApi.getCatalogItems(accessToken)
-        setItems(catalogItems)
+        setItems(catalogItems.items)
       }
       
       return result

@@ -3,7 +3,16 @@ import { ApiResponse, ApiError, RequestConfig, RequestOptions, ApiClientConfig }
 export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE' | 'HEAD' | 'OPTIONS';
 
 export class ApiClient {
-  private config: Required<ApiClientConfig>;
+  private config: {
+    baseURL: string;
+    timeout: number;
+    headers: Record<string, string>;
+    withCredentials: boolean;
+    token: string | (() => string | null) | null;
+    onRequest: (config: RequestConfig) => Promise<RequestConfig> | RequestConfig;
+    onResponse: <T>(response: Response) => Promise<T> | T;
+    onError: (error: ApiError) => void | Promise<void>;
+  };
   private pendingRequests: Map<string, AbortController> = new Map();
 
   constructor(config: ApiClientConfig) {
@@ -15,7 +24,7 @@ export class ApiClient {
         ...config.headers,
       },
       withCredentials: config.withCredentials ?? true,
-      token: config.token,
+      token: config.token ?? null,
       onRequest: config.onRequest || (async (cfg) => cfg),
       onResponse: config.onResponse || (async (res) => res.json()),
       onError: config.onError || (() => {}),
@@ -167,30 +176,30 @@ export class ApiClient {
         }
         
         // Apply response interceptor
-        return await this.config.onResponse<ApiResponse<T>>(response, result);
+        return await this.config.onResponse<ApiResponse<T>>(response);
       } catch (error) {
         const apiError = new Error('Failed to parse response') as ApiError;
         apiError.status = response.status;
         apiError.response = response;
         throw apiError;
       }
-    } catch (error) {
+    } catch (error: unknown) {
       clearTimeout(timeoutId);
       this.pendingRequests.delete(requestId);
-      
-      if (error.name === 'AbortError') {
+
+      if (error instanceof Error && error.name === 'AbortError') {
         const abortError = new Error('Request was aborted') as ApiError;
         abortError.status = 0;
         abortError.code = 'ABORTED';
         throw abortError;
       }
-      
+
       const apiError = error as ApiError;
       if (!apiError.status) {
         apiError.status = 0;
         apiError.code = 'NETWORK_ERROR';
       }
-      
+
       await this.config.onError?.(apiError);
       throw apiError;
     }

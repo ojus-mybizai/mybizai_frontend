@@ -117,7 +117,7 @@ export interface CatalogItemOut extends CatalogItemBase {
 }
 
 export interface CatalogListResponse {
-  items: CatalogItemOut[]
+  items: CatalogItem[]
   total: number
   page: number
   per_page: number
@@ -301,33 +301,24 @@ async function apiRequest<T>(
 export const authApi = {
   login: async (credentials: LoginRequest): Promise<LoginApiResponse> => {
     try {
-      const response = await apiRequest<LoginApiResponse>('/auth/login', {
+      const response = await apiRequest<{ success: boolean; data: LoginApiResponse }>('/auth/login', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify(credentials),
       });
+
+      console.log('✅ API LOGIN SUCCESS RESPONSE:', response)
+
       // Check if this is an UnverifiedUserResponse (no access_token)
-      if ('verification_required' in response && response.verification_required) {
-        // This is an unverified user response - throw error to be handled by caller
-        const unverifiedResponse = response?.data as UnverifiedUserResponse;
-        return unverifiedResponse
+      if ('verification_required' in response.data && response.data.verification_required) {
+        // This is an unverified user response - return to be handled by caller
+        return response.data as UnverifiedUserResponse
       }
 
       // At this point, response must be a LoginResponse (successful login)
-      const loginResponse = response?.data as LoginResponse;
-
-      // Ensure we have the required fields in the response (successful login)
-      if (!loginResponse.access_token) {
-        throw new Error('Invalid response from server: Missing access token');
-      }
-
-      return {
-        access_token: loginResponse.access_token,
-        token_type: loginResponse.token_type || 'bearer',
-        onboarding_required: loginResponse.onboarding_required || false,
-      };
+      return response.data as LoginResponse
     } catch (error) {
       if (error instanceof ApiError) {
         throw error;
@@ -636,17 +627,17 @@ export interface ContactCreate {
 }
 
 export interface ContactUpdate {
-  full_name?: string
-  phone?: string
-  email?: string
-  address?: string
-  company?: string
-  notes?: string
+  full_name?: string | null
+  phone?: string | null
+  email?: string | null
+  address?: string | null
+  company?: string | null
+  notes?: string | null
   metadata?: Record<string, any>
 }
 
 // CRM Types - Leads (Updated for generic CRM)
-export type LeadStatus = 'new' | 'contacted' | 'qualified' | 'won' | 'lost'
+export type LeadStatus = 'new' | 'contacted' | 'qualified' | 'won' | 'lost' | 'converted' | 'in_progress'
 export type LeadPriority = 'low' | 'medium' | 'high'
 export type LeadSource = 'portal' | 'website' | 'whatsapp' | 'referral' | 'walk-in' | 'ad_campaign'
 
@@ -679,11 +670,11 @@ export interface LeadCreate {
 export interface LeadUpdate {
   name?: string
   phone?: string
-  email?: string
+  email?: string | null | undefined
   source?: LeadSource
   status?: LeadStatus
   priority?: LeadPriority
-  notes?: string
+  notes?: string | null | undefined
   extra_data?: Record<string, any>
 }
 

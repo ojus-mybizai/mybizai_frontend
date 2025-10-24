@@ -65,7 +65,7 @@ export default function EditCatalogItemPage() {
           availability: catalogItem.availability,
           type: catalogItem.type,
           images: catalogItem.images,
-          template_fields: catalogItem.metadata,
+          template_fields: catalogItem.extra_data,
           created_at: catalogItem.created_at,
           updated_at: catalogItem.updated_at,
         }
@@ -145,7 +145,7 @@ export default function EditCatalogItemPage() {
         availability: data.availability,
         type: data.type,
         images: allImages,
-        metadata: data.template_fields || {},
+        extra_data: data.template_fields || {},
         template_id: null,
       }
       const backendItem = await authApi.updateCatalogItem(params.id as string, updateRequest, accessToken)
@@ -160,7 +160,7 @@ export default function EditCatalogItemPage() {
         availability: backendItem.availability,
         type: backendItem.type,
         images: backendItem.images,
-        template_fields: backendItem.metadata,
+        template_fields: backendItem.extra_data,
         created_at: backendItem.created_at,
         updated_at: backendItem.updated_at,
       }

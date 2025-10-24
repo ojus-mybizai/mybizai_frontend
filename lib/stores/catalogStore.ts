@@ -1,16 +1,17 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import { subscribeWithSelector } from 'zustand/middleware'
-import { CatalogItem } from '../api'
+import { CatalogItem, CatalogItemOut, ItemType, Availability, CatalogTemplate } from '../api'
 
 export interface CatalogFilters {
   category?: string
-  type?: string
-  availability?: string
+  type?: ItemType
+  availability?: Availability
 }
 
 interface CatalogState {
   items: CatalogItem[]
+  templates: CatalogTemplate[]
   isLoading: boolean
   searchQuery: string
   filters: CatalogFilters
@@ -25,12 +26,20 @@ interface CatalogState {
   setFilters: (filters: CatalogFilters) => void
   clearFilters: () => void
   clearItems: () => void
+
+  // Template actions
+  setTemplates: (templates: CatalogTemplate[]) => void
+  addTemplate: (template: CatalogTemplate) => void
+  updateTemplate: (id: string, template: CatalogTemplate) => void
+  removeTemplate: (id: string) => void
+  clearTemplates: () => void
 }
 
 export const useCatalogStore = create<CatalogState>()(
   persist(
     subscribeWithSelector((set, get) => ({
       items: [],
+      templates: [],
       isLoading: false,
       searchQuery: '',
       filters: {},
@@ -78,16 +87,47 @@ export const useCatalogStore = create<CatalogState>()(
       clearItems: () => {
         set({
           items: [],
+          templates: [],
           isLoading: false,
           searchQuery: '',
           filters: {}
         })
+      },
+
+      // Template methods
+      setTemplates: (templates: CatalogTemplate[]) => {
+        set({ templates })
+      },
+
+      addTemplate: (template: CatalogTemplate) => {
+        set((state) => ({
+          templates: [...state.templates, template]
+        }))
+      },
+
+      updateTemplate: (id: string, updatedTemplate: CatalogTemplate) => {
+        set((state) => ({
+          templates: state.templates.map(template =>
+            template.id === id ? updatedTemplate : template
+          )
+        }))
+      },
+
+      removeTemplate: (id: string) => {
+        set((state) => ({
+          templates: state.templates.filter(template => template.id !== id)
+        }))
+      },
+
+      clearTemplates: () => {
+        set({ templates: [] })
       }
     })),
     {
       name: 'catalog-storage',
       partialize: (state) => ({
         items: state.items,
+        templates: state.templates,
         searchQuery: state.searchQuery,
         filters: state.filters,
       }),

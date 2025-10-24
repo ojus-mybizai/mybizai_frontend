@@ -4,11 +4,13 @@ import { Filter, X } from 'lucide-react'
 import { Select } from '@/components/ui/Select'
 import { Button } from '@/components/ui/Button'
 
+import { ItemType, Availability } from '@/lib/api'
+
 interface FilterControlsProps {
   filters: {
     category: string
-    availability: string
-    type: string
+    availability: Availability | ''
+    type: ItemType | ''
   }
   onFilterChange: (key: string, value: string) => void
   onClearFilters: () => void

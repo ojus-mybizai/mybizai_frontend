@@ -24,6 +24,7 @@ export interface RequestOptions {
   skipAuth?: boolean;
   isFormData?: boolean;
   responseType?: 'json' | 'blob' | 'text';
+  timeout?: number;
 }
 
 export interface ApiError extends Error {

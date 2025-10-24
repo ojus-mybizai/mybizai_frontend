@@ -5,8 +5,8 @@ import { Bot } from 'lucide-react'
 interface AgentProfileData {
   name: string
   description: string
-  role_type: 'sales' | 'support' | 'lead_gen' | 'general'
-  tone: 'casual' | 'professional' | 'friendly'
+  role_type: 'sales' | 'support' | 'lead_gen' | 'general' | string
+  tone: 'casual' | 'professional' | 'friendly' | string
   instructions: string
 }
 

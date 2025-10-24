@@ -64,9 +64,9 @@ export default function TestDeployStep({ agentData, onPublish, isLoading }: Test
     }, agentData.ai_config.typing_delay || 1000)
   }
 
-  const enabledChannels = Object.entries(agentData.channels)
-    .filter(([_, enabled]) => enabled)
-    .map(([channel, _]) => channel)
+  const enabledChannels = (agentData.channels || [])
+    .filter((channel: any) => channel.is_connected)
+    .map((channel: any) => channel.type)
 
   const validationChecks = [
     {

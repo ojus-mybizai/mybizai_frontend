@@ -119,7 +119,7 @@ export default function NewCatalogItemPage() {
         availability: data.availability,
         type: data.type,
         images: imageUrls,
-        metadata: data.template_fields || {},
+        extra_data: data.template_fields || {},
         template_id: null, // Could be derived from form if needed
       }
       const backendItem = await authApi.createCatalogItem(createRequest, accessToken)
@@ -134,7 +134,7 @@ export default function NewCatalogItemPage() {
         availability: backendItem.availability,
         type: backendItem.type,
         images: backendItem.images,
-        template_fields: backendItem.metadata,
+        template_fields: backendItem.extra_data,
         created_at: backendItem.created_at,
         updated_at: backendItem.updated_at,
       }

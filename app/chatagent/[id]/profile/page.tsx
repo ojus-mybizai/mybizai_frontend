@@ -42,9 +42,9 @@ export default function AgentEditProfilePage() {
           setFormData({
             name: foundAgent.name || '',
             description: foundAgent.description || '',
-            role_type: foundAgent.ai_config?.role || 'general',
-            tone: foundAgent.ai_config?.tone || 'friendly',
-            instructions: foundAgent.ai_config?.system_prompt || ''
+            role_type: foundAgent.role_type || 'general',
+            tone: foundAgent.tone || 'friendly',
+            instructions: foundAgent.instructions || ''
           })
         } else {
           router.push('/chatagent')
@@ -57,9 +57,9 @@ export default function AgentEditProfilePage() {
         setFormData({
           name: response.name || '',
           description: response.description || '',
-          role_type: response.ai_config?.role || 'general',
-          tone: response.ai_config?.tone || 'friendly',
-          instructions: response.ai_config?.system_prompt || ''
+          role_type: response.role_type || 'general',
+          tone: response.tone || 'friendly',
+          instructions: response.instructions || ''
         })
       }
     } catch (error) {

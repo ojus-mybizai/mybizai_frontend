@@ -62,7 +62,7 @@ export default function CatalogTemplatesPage() {
       try {
         const catalogTemplates: CatalogTemplateOut[] = await authApi.getCatalogTemplates(accessToken)
         // Convert backend templates to frontend format
-        const frontendTemplates: CatalogTemplate[] = catalogtemplates?.map(t => ({
+        const frontendTemplates: CatalogTemplate[] = catalogTemplates?.map(t => ({
           id: String(t.id),
           name: t.name,
           description: '',
@@ -129,10 +129,10 @@ export default function CatalogTemplatesPage() {
           const updated: CatalogTemplate = {
             ...editingTemplate,
             ...data,
-            fields: data.fields.map((f, idx) => ({ id: editingtemplate?.fields[idx]?.id || `mock-${idx}`, ...f })),
+            fields: data.fields.map((f, idx) => ({ id: editingTemplate?.fields[idx]?.id || `mock-${idx}`, ...f })),
             updated_at: new Date().toISOString(),
           }
-          updateTemplate(editingtemplate?.id, updated)
+          updateTemplate(editingTemplate?.id, updated)
         } else {
           const now = new Date().toISOString()
           const created: CatalogTemplate = {
@@ -162,22 +162,22 @@ export default function CatalogTemplatesPage() {
           name: data.name,
           extra_metadata: data.fields.map(f => f.label),
         }
-        const updatedTemplate = await authApi.updateCatalogTemplate(Number(editingtemplate?.id), backendRequest, accessToken)
+        const updatedTemplate = await authApi.updateCatalogTemplate(Number(editingTemplate?.id), backendRequest, accessToken)
         // Convert back to frontend format
         const frontendTemplate: CatalogTemplate = {
-          id: String(updatedtemplate?.id),
-          name: updatedtemplate?.name,
+          id: String(updatedTemplate?.id),
+          name: updatedTemplate?.name,
           description: data.description || '',
-          fields: updatedtemplate?.extra_metadata.map((field, idx) => ({
+          fields: updatedTemplate?.extra_metadata.map((field, idx) => ({
             id: `field-${idx}`,
             label: field,
             type: 'text' as const,
             required: false,
           })),
-          created_at: updatedtemplate?.created_at,
-          updated_at: updatedtemplate?.updated_at,
+          created_at: updatedTemplate?.created_at,
+          updated_at: updatedTemplate?.updated_at,
         }
-        updateTemplate(editingtemplate?.id, frontendTemplate)
+        updateTemplate(editingTemplate?.id, frontendTemplate)
       } else {
         const backendRequest: CatalogTemplateCreate = {
           name: data.name,
@@ -185,17 +185,17 @@ export default function CatalogTemplatesPage() {
         }
         const newTemplate = await authApi.createCatalogTemplate(backendRequest, accessToken)
         const frontendTemplate: CatalogTemplate = {
-          id: String(newtemplate?.id),
-          name: newtemplate?.name,
+          id: String(newTemplate?.id),
+          name: newTemplate?.name,
           description: data.description || '',
-          fields: newtemplate?.extra_metadata.map((field, idx) => ({
+          fields: newTemplate?.extra_metadata.map((field, idx) => ({
             id: `field-${idx}`,
             label: field,
             type: 'text' as const,
             required: false,
           })),
-          created_at: newtemplate?.created_at,
-          updated_at: newtemplate?.updated_at,
+          created_at: newTemplate?.created_at,
+          updated_at: newTemplate?.updated_at,
         }
         addTemplate(frontendTemplate)
       }
@@ -234,7 +234,7 @@ export default function CatalogTemplatesPage() {
             </h1>
             <p className="text-gray-600 dark:text-gray-400 mt-1">
               {editingTemplate 
-                ? `Update "${editingtemplate?.name}" template`
+                ? `Update "${editingTemplate?.name}" template`
                 : 'Create a new catalog template with custom fields'
               }
             </p>

@@ -11,7 +11,7 @@ import FilterControls from '@/components/catalog/FilterControls'
 import { useAuthStore, useCatalogStore } from '@/lib/stores'
 import { authApi } from '@/lib/api'
 // import { MockApiError } from '@/lib/mockData'
-import { CatalogItem, CatalogListResponse, Availability } from '@/lib/api'
+import { CatalogItem, CatalogListResponse, Availability, ItemType } from '@/lib/api'
 
 // Toggle to use raw mock data instead of calling the API
 const USE_MOCK = false
@@ -205,7 +205,13 @@ export default function CatalogPage() {
   }
 
   const handleFilterChange = (key: string, value: string) => {
-    setFilters({ [key]: value })
+    if (key === 'type') {
+      setFilters({ type: value as ItemType || undefined })
+    } else if (key === 'availability') {
+      setFilters({ availability: value as Availability || undefined })
+    } else {
+      setFilters({ [key]: value || undefined })
+    }
   }
 
   if (!accessToken) {

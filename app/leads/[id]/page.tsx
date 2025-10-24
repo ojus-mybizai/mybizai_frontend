@@ -8,8 +8,8 @@ import { Input } from '@/components/ui/Input'
 import { Textarea } from '@/components/ui/Textarea'
 import { Select } from '@/components/ui/Select'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
-import { useAuthStore, useLeadStore } from '@/lib/store'
-import { crmApi, ApiError, Lead, LeadUpdate, LeadStatus, LeadSource, PropertyType, LeadPriority } from '@/lib/api'
+import { useAuthStore, useLeadStore } from '@/lib/stores'
+import { crmApi, ApiError, Lead, LeadUpdate, LeadStatus, LeadSource, LeadPriority } from '@/lib/api'
 
 const statusOptions = [
   { value: 'new', label: 'New' },
@@ -94,16 +94,12 @@ export default function LeadDetailPage() {
       
       // Initialize form data
       setFormData({
-        full_name: leadData.full_name,
+        name: leadData.name,
         phone: leadData.phone,
         email: leadData.email,
         source: leadData.source,
         status: leadData.status,
         priority: leadData.priority,
-        budget_min: leadData.budget_min,
-        budget_max: leadData.budget_max,
-        preferred_location: leadData.preferred_location,
-        property_type: leadData.property_type,
         notes: leadData.notes,
       })
     } catch (error) {
@@ -120,8 +116,8 @@ export default function LeadDetailPage() {
   const validateForm = () => {
     const newErrors: Record<string, string> = {}
 
-    if (!formData.full_name?.trim()) {
-      newErrors.full_name = 'Full name is required'
+    if (!formData.name?.trim()) {
+      newErrors.name = 'Name is required'
     }
 
     if (!formData.phone?.trim()) {
@@ -132,22 +128,6 @@ export default function LeadDetailPage() {
 
     if (formData.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
       newErrors.email = 'Please enter a valid email address'
-    }
-
-    if (formData.budget_min && formData.budget_max && formData.budget_min > formData.budget_max) {
-      newErrors.budget_max = 'Maximum budget must be greater than minimum budget'
-    }
-
-    if (formData.budget_min && formData.budget_min < 0) {
-      newErrors.budget_min = 'Budget must be a positive number'
-    }
-
-    if (formData.budget_max && formData.budget_max < 0) {
-      newErrors.budget_max = 'Budget must be a positive number'
-    }
-
-    if (formData.preferred_location && formData.preferred_location.length > 200) {
-      newErrors.preferred_location = 'Preferred location must be 200 characters or less'
     }
 
     if (formData.notes && formData.notes.length > 2000) {
@@ -173,10 +153,6 @@ export default function LeadDetailPage() {
       const updateData: LeadUpdate = {
         ...formData,
         email: formData.email || undefined,
-        budget_min: formData.budget_min || undefined,
-        budget_max: formData.budget_max || undefined,
-        preferred_location: formData.preferred_location || undefined,
-        property_type: formData.property_type || undefined,
         notes: formData.notes || undefined,
       }
 
@@ -199,16 +175,12 @@ export default function LeadDetailPage() {
   const handleCancel = () => {
     if (lead) {
       setFormData({
-        full_name: lead.full_name,
+        name: lead.name,
         phone: lead.phone,
         email: lead.email,
         source: lead.source,
         status: lead.status,
         priority: lead.priority,
-        budget_min: lead.budget_min,
-        budget_max: lead.budget_max,
-        preferred_location: lead.preferred_location,
-        property_type: lead.property_type,
         notes: lead.notes,
       })
     }
@@ -253,7 +225,7 @@ export default function LeadDetailPage() {
           <div>
             <div className="flex items-center space-x-3">
               <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
-                {lead.full_name}
+                {lead.name}
               </h1>
               <span className={`px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(lead.status)}`}>
                 {lead.status.replace('_', ' ').toUpperCase()}
@@ -306,10 +278,10 @@ export default function LeadDetailPage() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="md:col-span-2">
                     <Input
-                      label="Full Name *"
-                      value={formData.full_name || ''}
-                      onChange={(e) => handleInputChange('full_name', e.target.value)}
-                      error={errors.full_name}
+                      label="Name *"
+                      value={formData.name || ''}
+                      onChange={(e) => handleInputChange('name', e.target.value)}
+                      error={errors.name}
                     />
                   </div>
                   
@@ -335,40 +307,9 @@ export default function LeadDetailPage() {
                     onChange={(e) => handleInputChange('source', e.target.value as LeadSource)}
                     error={errors.source}
                   />
+                 
                   
-                  <Select
-                    label="Property Type"
-                    options={propertyTypeOptions}
-                    value={formData.property_type || ''}
-                    onChange={(e) => handleInputChange('property_type', e.target.value as PropertyType || undefined)}
-                    error={errors.property_type}
-                  />
-                  
-                  <div className="md:col-span-2">
-                    <Input
-                      label="Preferred Location"
-                      value={formData.preferred_location || ''}
-                      onChange={(e) => handleInputChange('preferred_location', e.target.value)}
-                      error={errors.preferred_location}
-                    />
                   </div>
-                  
-                  <Input
-                    label="Minimum Budget (₹)"
-                    type="number"
-                    value={formData.budget_min || ''}
-                    onChange={(e) => handleInputChange('budget_min', e.target.value ? parseFloat(e.target.value) : undefined)}
-                    error={errors.budget_min}
-                  />
-                  
-                  <Input
-                    label="Maximum Budget (₹)"
-                    type="number"
-                    value={formData.budget_max || ''}
-                    onChange={(e) => handleInputChange('budget_max', e.target.value ? parseFloat(e.target.value) : undefined)}
-                    error={errors.budget_max}
-                  />
-                </div>
               ) : (
                 <div className="space-y-6">
                   <div className="flex items-center space-x-4">
@@ -376,7 +317,7 @@ export default function LeadDetailPage() {
                       <User className="w-8 h-8 text-blue-600 dark:text-blue-400" />
                     </div>
                     <div>
-                      <h2 className="text-2xl font-semibold">{lead.full_name}</h2>
+                      <h2 className="text-2xl font-semibold">{lead.name}</h2>
                       <p className="text-gray-600 dark:text-gray-400">
                         Lead from {lead.source.replace('_', ' ')}
                       </p>
@@ -406,42 +347,6 @@ export default function LeadDetailPage() {
                       </div>
                     )}
 
-                    {lead.property_type && (
-                      <div className="flex items-center space-x-3">
-                        <Building className="w-5 h-5 text-gray-400" />
-                        <div>
-                          <p className="text-sm text-gray-500">Property Type</p>
-                          <p className="font-medium capitalize">{lead.property_type}</p>
-                        </div>
-                      </div>
-                    )}
-
-                    {lead.preferred_location && (
-                      <div className="flex items-center space-x-3">
-                        <MapPin className="w-5 h-5 text-gray-400" />
-                        <div>
-                          <p className="text-sm text-gray-500">Preferred Location</p>
-                          <p className="font-medium">{lead.preferred_location}</p>
-                        </div>
-                      </div>
-                    )}
-
-                    {(lead.budget_min || lead.budget_max) && (
-                      <div className="flex items-center space-x-3 md:col-span-2">
-                        <DollarSign className="w-5 h-5 text-gray-400" />
-                        <div>
-                          <p className="text-sm text-gray-500">Budget Range</p>
-                          <p className="font-medium">
-                            {lead.budget_min && lead.budget_max
-                              ? `₹${lead.budget_min.toLocaleString()} - ₹${lead.budget_max.toLocaleString()}`
-                              : lead.budget_min
-                              ? `₹${lead.budget_min.toLocaleString()}+`
-                              : `Up to ₹${lead.budget_max?.toLocaleString()}`
-                            }
-                          </p>
-                        </div>
-                      </div>
-                    )}
                   </div>
                 </div>
               )}
@@ -559,12 +464,12 @@ export default function LeadDetailPage() {
                 </div>
               </div>
 
-              {lead.user_id && (
+              {lead.id && (
                 <div className="flex items-center space-x-3">
                   <User className="w-5 h-5 text-gray-400" />
                   <div>
                     <p className="text-sm text-gray-500">Assigned To</p>
-                    <p className="text-sm font-medium">User ID: {lead.user_id}</p>
+                    <p className="text-sm font-medium">User ID: {lead.id}</p>
                   </div>
                 </div>
               )}

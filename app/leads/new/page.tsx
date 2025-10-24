@@ -42,7 +42,7 @@ export default function NewLeadPage() {
   const { addLead } = useLeadStore()
 
   const [formData, setFormData] = useState<LeadCreate>({
-    full_name: '',
+    name: '',
     phone: '',
     email: '',
     source: 'website',
@@ -58,8 +58,8 @@ export default function NewLeadPage() {
   const validateForm = () => {
     const newErrors: Record<string, string> = {}
 
-    if (!formData.full_name.trim()) {
-      newErrors.full_name = 'Full name is required'
+    if (!formData.name.trim()) {
+      newErrors.name = 'Name is required'
     }
 
     if (!formData.phone.trim()) {
@@ -151,9 +151,9 @@ export default function NewLeadPage() {
                   <div className="md:col-span-2">
                     <Input
                       label="Full Name *"
-                      value={formData.full_name}
-                      onChange={(e) => handleInputChange('full_name', e.target.value)}
-                      error={errors.full_name}
+                      value={formData.name}
+                      onChange={(e) => handleInputChange('name', e.target.value)}
+                      error={errors.name}
                       placeholder="Enter full name"
                     />
                   </div>
