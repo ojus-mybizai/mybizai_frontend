@@ -1,0 +1,1904 @@
+"use client"
+
+import { useMemo, useState, useRef, useEffect } from "react"
+import { Search, Send, Paperclip, Smile, Phone, Instagram, MessageCircle, Mail, X, ChevronLeft, ChevronRight, Upload, Image, Check, CheckCheck, MoreHorizontal, Plus } from "lucide-react"
+import { useAuthStore } from "@/lib/store"
+import { convoApi, ConvoOut, MessageCreate } from "@/lib/api"
+
+// Basic utilities from your design system if available. Keeping dependencies minimal to avoid unknown imports.
+// Buttons/inputs are styled with Tailwind to match existing look-and-feel.
+
+type Channel = "WhatsApp" | "Instagram" | "Messenger" | "Email"
+type LeadType = "Hot" | "Warm" | "Cold"
+
+type Lead = {
+  id: string
+  name: string
+  channel: Channel
+  type: LeadType
+  lastMessage: string
+  timestamp: string
+  unreadCount: number
+  isOnline: boolean
+  lastSeen?: string
+}
+
+type ChatMessage = {
+  id: string
+  author: "lead" | "ai"
+  text: string
+  timestamp: string
+  status?: "sent" | "delivered" | "read"
+  quickReplies?: string[]
+}
+
+// Convert ConvoOut to Lead format for UI compatibility
+const convertConvoToLead = (convo: ConvoOut): Lead => ({
+  id: convo.id.toString(),
+  name: convo.title, // Using title as name for now, should be linked to lead
+  channel: convo.channel as Channel,
+  type: "Warm", // Default type, should be determined from metadata or linked lead
+  lastMessage: convo.summary || "No messages yet",
+  timestamp: convo.last_message_at ? new Date(convo.last_message_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "No messages",
+  unreadCount: 0, // Should be calculated from message count
+  isOnline: convo.status === "active",
+})
+
+// Convert message API data to ChatMessage format
+const convertApiMessageToChatMessage = (apiMessage: any): ChatMessage => ({
+  id: apiMessage.id.toString(),
+  author: apiMessage.sender === "user" ? "lead" : "ai",
+  text: apiMessage.text,
+  timestamp: new Date(apiMessage.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+  status: "read",
+})
+
+"use client"
+
+import { useMemo, useState, useRef, useEffect } from "react"
+import { Search, Send, Paperclip, Smile, Phone, Instagram, MessageCircle, Mail, X, ChevronLeft, ChevronRight, Upload, Image, Check, CheckCheck, MoreHorizontal, Plus } from "lucide-react"
+import { useAuthStore } from "@/lib/store"
+import { convoApi, ConvoOut, MessageCreate } from "@/lib/api"
+
+// Basic utilities from your design system if available. Keeping dependencies minimal to avoid unknown imports.
+// Buttons/inputs are styled with Tailwind to match existing look-and-feel.
+
+type Channel = "WhatsApp" | "Instagram" | "Messenger" | "Email"
+type LeadType = "Hot" | "Warm" | "Cold"
+
+type Lead = {
+  id: string
+  name: string
+  channel: Channel
+  type: LeadType
+  lastMessage: string
+  timestamp: string
+  unreadCount: number
+  isOnline: boolean
+  lastSeen?: string
+}
+
+type ChatMessage = {
+  id: string
+  author: "lead" | "ai"
+  text: string
+  timestamp: string
+  status?: "sent" | "delivered" | "read"
+  quickReplies?: string[]
+}
+
+// Convert ConvoOut to Lead format for UI compatibility
+const convertConvoToLead = (convo: ConvoOut): Lead => ({
+  id: convo.id.toString(),
+  name: convo.title, // Using title as name for now, should be linked to lead
+  channel: convo.channel as Channel,
+  type: "Warm", // Default type, should be determined from metadata or linked lead
+  lastMessage: convo.summary || "No messages yet",
+  timestamp: convo.last_message_at ? new Date(convo.last_message_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "No messages",
+  unreadCount: 0, // Should be calculated from message count
+  isOnline: convo.status === "active",
+})
+
+// Convert message API data to ChatMessage format
+const convertApiMessageToChatMessage = (apiMessage: any): ChatMessage => ({
+  id: apiMessage.id.toString(),
+  author: apiMessage.sender === "user" ? "lead" : "ai",
+  text: apiMessage.text,
+  timestamp: new Date(apiMessage.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+  status: "read",
+})
+
+function ChannelIcon({ channel }: { channel: Channel }) {
+  const common = "w-4 h-4"
+  switch (channel) {
+    case "WhatsApp":
+      return <Phone className={common} />
+    case "Instagram":
+      return <Instagram className={common} />
+    case "Messenger":
+      return <MessageCircle className={common} />
+    case "Email":
+      return <Mail className={common} />
+    default:
+      return null
+  }
+}
+
+function StatusBadge({ type }: { type: LeadType }) {
+  const cls =
+    type === "Hot"
+      ? "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300"
+      : type === "Warm"
+      ? "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300"
+      : "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300"
+  return (
+    <span className={`text-xs px-2 py-0.5 rounded-full ${cls}`} title={`${type} lead - ${getLeadTypeDescription(type)}`}>
+      {type}
+    </span>
+  )
+}
+
+function getLeadTypeDescription(type: LeadType): string {
+  switch (type) {
+    case "Hot": return "High interest, ready to buy"
+    case "Warm": return "Interested, needs nurturing"
+    case "Cold": return "Low interest, requires engagement"
+    default: return ""
+  }
+}
+
+function MessageStatus({ status }: { status?: "sent" | "delivered" | "read" }) {
+  if (!status) return null
+
+  switch (status) {
+    case "sent":
+      return <Check className="w-3 h-3 text-gray-400" />
+    case "delivered":
+      return <CheckCheck className="w-3 h-3 text-gray-400" />
+    case "read":
+      return <CheckCheck className="w-3 h-3 text-blue-500" />
+    default:
+      return null
+  }
+}
+
+function OnlineIndicator({ isOnline, lastSeen }: { isOnline: boolean; lastSeen?: string }) {
+  if (isOnline) {
+    return <div className="w-2 h-2 bg-green-500 rounded-full" title="Online" />
+  }
+
+  if (lastSeen) {
+    return <div className="w-2 h-2 bg-gray-400 rounded-full" title={`Last seen ${lastSeen}`} />
+  }
+
+  return null
+}
+
+function FilterChip({
+  label,
+  isSelected,
+  onToggle,
+  onRemove
+}: {
+  label: string
+  isSelected: boolean
+  onToggle: () => void
+  onRemove?: () => void
+}) {
+  return (
+    <button
+      onClick={onToggle}
+      className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium transition-colors ${
+        isSelected
+          ? "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300"
+          : "bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600"
+      }`}
+    >
+      {label}
+      {isSelected && onRemove && (
+        <X className="w-3 h-3 ml-1 cursor-pointer" onClick={(e) => { e.stopPropagation(); onRemove() }} />
+      )}
+    </button>
+  )
+}
+
+function DateSeparator({ date }: { date: string }) {
+  return (
+    <div className="flex items-center justify-center my-4">
+      <div className="bg-gray-100 dark:bg-gray-700 px-3 py-1 rounded-full">
+        <span className="text-xs text-gray-600 dark:text-gray-400">{date}</span>
+      </div>
+    </div>
+  )
+}
+
+function TypingIndicator() {
+  return (
+    <div className="flex justify-start mb-4">
+      <div className="max-w-[75%]">
+        <div className="bg-gray-100 dark:bg-gray-700 rounded-2xl px-4 py-2">
+          <div className="flex items-center space-x-1">
+            <div className="flex space-x-1">
+              <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
+              <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
+              <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
+            </div>
+            <span className="text-xs text-gray-500 ml-2">AI is typing...</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+export default function ChatsPage() {
+  const { accessToken } = useAuthStore()
+
+  // Filter states - now using arrays for multi-select
+  const [selectedChannels, setSelectedChannels] = useState<Channel[]>([])
+  const [selectedLeadTypes, setSelectedLeadTypes] = useState<LeadType[]>([])
+  const [handledFilter, setHandledFilter] = useState<"AI" | "Manual">("AI")
+  const [search, setSearch] = useState("")
+  const [isLoading, setIsLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  // UI states
+  const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null)
+  const [conversations, setConversations] = useState<ConvoOut[]>([])
+  const [selectedConversation, setSelectedConversation] = useState<ConvoOut | null>(null)
+  const [messages, setMessages] = useState<ChatMessage[]>([])
+  const [conversationMessages, setConversationMessages] = useState<any[]>([])
+  const [chatMode, setChatMode] = useState<Record<string, "AI" | "Manual">>({})
+  const [drafts, setDrafts] = useState<Record<string, string>>({})
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
+  const [isTyping, setIsTyping] = useState(false)
+  const [enterToSend, setEnterToSend] = useState(true)
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false)
+  const [showNewChatModal, setShowNewChatModal] = useState(false)
+
+  // Refs
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const chatBodyRef = useRef<HTMLDivElement>(null)
+
+  // Load conversations on mount
+  useEffect(() => {
+    if (accessToken) {
+      loadConversations()
+    }
+  }, [accessToken])
+
+  // Load conversation messages when conversation is selected
+  useEffect(() => {
+    if (selectedConversation && accessToken) {
+      loadConversationMessages(selectedConversation.id)
+    }
+  }, [selectedConversation, accessToken])
+
+  const loadConversations = async () => {
+    if (!accessToken) return
+
+    setIsLoading(true)
+    setError(null)
+    try {
+      const convos = await convoApi.getConversations(accessToken)
+      setConversations(convos)
+      if (convos.length > 0 && !selectedLeadId) {
+        setSelectedLeadId(convos[0].id.toString())
+        setSelectedConversation(convos[0])
+      }
+    } catch (error) {
+      console.error('Failed to load conversations:', error)
+      setError('Failed to load conversations')
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const loadConversationMessages = async (convoId: number) => {
+    if (!accessToken) return
+
+    try {
+      const apiMessages = await convoApi.getConversationMessages(convoId, accessToken)
+      setConversationMessages(apiMessages)
+      const chatMessages = apiMessages.map(convertApiMessageToChatMessage)
+      setMessages(chatMessages)
+    } catch (error) {
+      console.error('Failed to load conversation messages:', error)
+      setMessages([])
+    }
+  }
+
+  // Filter functions
+  const toggleChannelFilter = (channel: Channel) => {
+    setSelectedChannels(prev =>
+      prev.includes(channel)
+        ? prev.filter(c => c !== channel)
+        : [...prev, channel]
+    )
+  }
+
+  const toggleLeadTypeFilter = (type: LeadType) => {
+    setSelectedLeadTypes(prev =>
+      prev.includes(type)
+        ? prev.filter(t => t !== type)
+        : [...prev, type]
+    )
+  }
+
+  const clearAllFilters = () => {
+    setSelectedChannels([])
+    setSelectedLeadTypes([])
+    setSearch("")
+  }
+
+  const leads = useMemo(() => {
+    return conversations
+      .map(convertConvoToLead)
+      .filter((l) => {
+        const channelOk = selectedChannels.length === 0 || selectedChannels.includes(l.channel)
+        const typeOk = selectedLeadTypes.length === 0 || selectedLeadTypes.includes(l.type)
+        const searchOk = !search ||
+          l.name.toLowerCase().includes(search.toLowerCase()) ||
+          l.lastMessage.toLowerCase().includes(search.toLowerCase())
+        return channelOk && typeOk && searchOk
+      })
+  }, [conversations, selectedChannels, selectedLeadTypes, search])
+
+  const selectedLead = useMemo(() =>
+    leads.find((l) => l.id === selectedLeadId) || null,
+    [leads, selectedLeadId]
+  )
+
+  const currentMode: "AI" | "Manual" = selectedLeadId ? chatMode[selectedLeadId] || handledFilter : handledFilter
+  const draft = selectedLeadId ? drafts[selectedLeadId] || "" : ""
+
+  // Simulate typing indicator
+  useEffect(() => {
+    if (currentMode === "AI" && messages.length > 0) {
+      const lastMessage = messages[messages.length - 1]
+      if (lastMessage.author === "lead") {
+        setIsTyping(true)
+        const timer = setTimeout(() => setIsTyping(false), 2000)
+        return () => clearTimeout(timer)
+      }
+    }
+  }, [messages, currentMode])
+
+  // Auto-scroll to bottom
+  useEffect(() => {
+    if (chatBodyRef.current) {
+      chatBodyRef.current.scrollTop = chatBodyRef.current.scrollHeight
+    }
+  }, [messages, isTyping])
+
+  const handleSend = async () => {
+    if (!selectedLeadId || !draft.trim() || !selectedConversation) return
+
+    try {
+      // Add message via API
+      await convoApi.addMessage(selectedConversation.id, {
+        text: draft.trim(),
+        sender: "agent",
+        message_type: "text",
+      })
+
+      // Refresh conversation and messages
+      await loadConversationMessages(selectedConversation.id)
+      await loadConversations()
+
+      setDrafts((d) => ({ ...d, [selectedLeadId]: "" }))
+    } catch (error) {
+      console.error('Failed to send message:', error)
+      // Could add toast notification here
+    }
+  }
+
+  const handleQuickReply = (reply: string) => {
+    if (!selectedLeadId || !selectedConversation) return
+
+    // For now, just add as AI message - in real implementation this would go through webhook
+    setMessages(prev => [...prev, {
+      id: Math.random().toString(36).slice(2),
+      author: "lead",
+      text: reply,
+      timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+      status: "read",
+    }])
+  }
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (enterToSend && e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault()
+      handleSend()
+    }
+  }
+
+  const createNewConversation = async (formData: {
+    name: string
+    phone: string
+    email: string
+    channel: Channel
+    type: LeadType
+    message: string
+  }) => {
+    if (!accessToken) return
+
+    try {
+      const newConvo = await convoApi.createConversation({
+        title: formData.name,
+        channel: formData.channel.toLowerCase(),
+        initial_message: formData.message || null,
+      }, accessToken)
+
+      // Refresh conversations
+      await loadConversations()
+
+      // Select the new conversation
+      setSelectedLeadId(newConvo.id.toString())
+      setSelectedConversation(newConvo)
+
+      return newConvo
+    } catch (error) {
+      console.error('Failed to create conversation:', error)
+      throw error
+    }
+  }
+
+  return (
+    <div className="space-y-4">
+      {/* Compact Page Header */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-purple-600 dark:from-blue-600 dark:to-purple-700 flex items-center justify-center shadow-lg">
+            <MessageCircle className="w-5 h-5 text-white" />
+          </div>
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Chats</h1>
+            <p className="text-sm text-gray-500 dark:text-gray-400">Live conversations</p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-3">
+          {/* New Chat Button */}
+          <button
+            onClick={() => setShowNewChatModal(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white rounded-lg shadow-lg transition-all duration-200 hover:shadow-xl"
+          >
+            <Plus className="w-4 h-4" />
+            <span className="hidden sm:inline">New Chat</span>
+          </button>
+
+          {/* Sidebar Toggle */}
+          <button
+            onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+            className="lg:hidden p-2 rounded-lg border border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
+          >
+            {sidebarCollapsed ? <ChevronRight className="w-5 h-5" /> : <ChevronLeft className="w-5 h-5" />}
+          </button>
+        </div>
+      </div>
+
+      {/* Loading/Error States */}
+      {isLoading && (
+        <div className="flex items-center justify-center h-64">
+          <div className="text-gray-500">Loading conversations...</div>
+        </div>
+      )}
+
+      {error && (
+        <div className="text-center py-8">
+          <p className="text-red-500 mb-4">{error}</p>
+          <button
+            onClick={loadConversations}
+            className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600"
+          >
+            Retry
+          </button>
+        </div>
+      )}
+
+      {/* Two-column layout container */}
+      {!isLoading && !error && (
+        <div className={`grid gap-4 h-[calc(100vh-11rem)] overflow-hidden ${
+          sidebarCollapsed ? 'grid-cols-1' : 'grid-cols-1 lg:grid-cols-3'
+        }`}>
+          {/* Left Sidebar */}
+          {!sidebarCollapsed && (
+            <aside className="lg:col-span-1 bg-white dark:bg-gray-900/50 border border-gray-200 dark:border-gray-700/50 rounded-xl flex flex-col overflow-hidden backdrop-blur-sm">
+              {/* Filters and Search */}
+              <div className="p-2 border-b border-gray-200 dark:border-gray-700 space-y-2">
+                {/* Search */}
+                <div className="relative">
+                  <input
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    placeholder="Search conversations..."
+                    className="w-full pl-9 pr-3 py-2 rounded-md bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-sm text-gray-900 dark:text-gray-100"
+                  />
+                  <Search className="w-4 h-4 absolute left-3 top-2.5 text-gray-400" />
+                </div>
+
+                {/* Channel Filters */}
+                <div>
+                  <label className="text-xs text-gray-500 dark:text-gray-400 mb-2 block">Channels</label>
+                  <div className="flex flex-wrap gap-1">
+                    {(["WhatsApp", "Instagram", "Messenger", "Email"] as Channel[]).map(channel => (
+                      <FilterChip
+                        key={channel}
+                        label={channel}
+                        isSelected={selectedChannels.includes(channel)}
+                        onToggle={() => toggleChannelFilter(channel)}
+                        onRemove={() => toggleChannelFilter(channel)}
+                      />
+                    ))}
+                  </div>
+                </div>
+
+                {/* Lead Type Filters */}
+                <div>
+                  <label className="text-xs text-gray-500 dark:text-gray-400 mb-2 block">Lead Types</label>
+                  <div className="flex flex-wrap gap-1">
+                    {(["Hot", "Warm", "Cold"] as LeadType[]).map(type => (
+                      <FilterChip
+                        key={type}
+                        label={type}
+                        isSelected={selectedLeadTypes.includes(type)}
+                        onToggle={() => toggleLeadTypeFilter(type)}
+                        onRemove={() => toggleLeadTypeFilter(type)}
+                      />
+                    ))}
+                  </div>
+                </div>
+
+                {/* Clear Filters */}
+                {(selectedChannels.length > 0 || selectedLeadTypes.length > 0 || search) && (
+                  <button
+                    onClick={clearAllFilters}
+                    className="text-xs text-blue-500 hover:text-blue-700 dark:hover:text-blue-300 underline w-full text-center"
+                  >
+                    Clear all filters
+                  </button>
+                )}
+              </div>
+
+              {/* Lead List */}
+              <div className="flex-1 overflow-y-auto">
+                <ul className="divide-y divide-gray-200 dark:divide-gray-700">
+                  {leads.map((lead) => (
+                    <li
+                      key={lead.id}
+                      onClick={() => {
+                        setSelectedLeadId(lead.id)
+                        const convo = conversations.find(c => c.id.toString() === lead.id)
+                        setSelectedConversation(convo || null)
+                      }}
+                      className={`p-3 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-900 transition-colors ${
+                        selectedLeadId === lead.id ? "bg-blue-50 dark:bg-blue-900/20 border-r-2 border-blue-500" : ""
+                      }`}
+                    >
+                      <div className="flex items-start gap-3">
+                        <div className="relative mt-0.5">
+                          <div className="w-8 h-8 rounded-full bg-gray-100 dark:bg-gray-700 flex items-center justify-center">
+                            <ChannelIcon channel={lead.channel} />
+                          </div>
+                          <div className="absolute -bottom-1 -right-1">
+                            <OnlineIndicator isOnline={lead.isOnline} lastSeen={lead.lastSeen} />
+                          </div>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <p className="font-medium text-gray-900 dark:text-gray-100 truncate">{lead.name}</p>
+                              {lead.unreadCount > 0 && (
+                                <span className="bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
+                                  {lead.unreadCount}
+                                </span>
+                              )}
+                            </div>
+                            <span className="text-xs text-gray-400 dark:text-gray-500 ml-2 shrink-0">{lead.timestamp}</span>
+                          </div>
+                          <div className="mt-1 flex items-center gap-2">
+                            <StatusBadge type={lead.type} />
+                            <span className="text-sm text-gray-600 dark:text-gray-400 truncate">{lead.lastMessage}</span>
+                          </div>
+                        </div>
+                      </div>
+                    </li>
+                  ))}
+                  {leads.length === 0 && (
+                    <li className="p-6 text-center text-sm text-gray-500 dark:text-gray-400">
+                      No conversations match your filters.
+                    </li>
+                  )}
+                </ul>
+              </div>
+            </aside>
+          )}
+
+          {/* Right Chat Window */}
+          <section className={`bg-white dark:bg-gray-900/50 border border-gray-200 dark:border-gray-700/50 rounded-xl flex flex-col overflow-hidden backdrop-blur-sm ${
+            sidebarCollapsed ? 'col-span-1' : 'lg:col-span-2'
+          }`}>
+            {/* Chat Header (sticky) */}
+            <div className="sticky top-0 z-10 bg-white/95 dark:bg-gray-800/95 backdrop-blur border-b border-gray-200 dark:border-gray-700 p-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  {sidebarCollapsed && (
+                    <button
+                      onClick={() => setSidebarCollapsed(false)}
+                      className="p-1 rounded-md text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
+                    >
+                      <ChevronRight className="w-5 h-5" />
+                    </button>
+                  )}
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+                        {selectedLead?.name || "Select a conversation"}
+                      </h2>
+                      {selectedLead && (
+                        <OnlineIndicator isOnline={selectedLead.isOnline} lastSeen={selectedLead.lastSeen} />
+                      )}
+                    </div>
+                    {selectedLead && (
+                      <div className="flex items-center gap-2 mt-1 text-xs text-gray-500 dark:text-gray-400">
+                        <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-gray-100 dark:bg-gray-700">
+                          <ChannelIcon channel={selectedLead.channel} />
+                          <span>{selectedLead.channel}</span>
+                        </div>
+                        <StatusBadge type={selectedLead.type} />
+                        {!selectedLead.isOnline && selectedLead.lastSeen && (
+                          <span>Last seen {selectedLead.lastSeen}</span>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {selectedLead && (
+                  <div className="inline-flex rounded-md overflow-hidden border border-gray-200 dark:border-gray-700">
+                    <button
+                      className={`px-3 py-1.5 text-xs transition-colors ${
+                        currentMode === "AI"
+                          ? "bg-gray-900 text-white dark:bg-gray-100 dark:text-gray-900"
+                          : "bg-transparent text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
+                      }`}
+                      onClick={() => setChatMode((m) => ({ ...m, [selectedLead.id]: "AI" }))}
+                    >
+                      AI-handled
+                    </button>
+                    <button
+                      className={`px-3 py-1.5 text-xs transition-colors ${
+                        currentMode === "Manual"
+                          ? "bg-gray-900 text-white dark:bg-gray-100 dark:text-gray-900"
+                          : "bg-transparent text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
+                      }`}
+                      onClick={() => setChatMode((m) => ({ ...m, [selectedLead.id]: "Manual" }))}
+                    >
+                      Manual
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Chat Body - independent scroll */}
+            <div ref={chatBodyRef} className="flex-1 overflow-y-auto p-3 space-y-3">
+              {!selectedLead && (
+                <div className="h-full flex items-center justify-center text-gray-500 dark:text-gray-400">
+                  <div className="text-center">
+                    <MessageCircle className="w-12 h-12 mx-auto mb-4 text-gray-300 dark:text-gray-600" />
+                    <p>Select a conversation from the sidebar to view messages</p>
+                  </div>
+                </div>
+              )}
+
+              {selectedLead && (
+                <div className="space-y-2">
+                  <DateSeparator date="Today" />
+
+                  {messages.map((msg, index) => {
+                    const isAI = msg.author === "ai"
+                    const showQuickReplies = isAI && msg.quickReplies && index === messages.length - 1
+
+                    return (
+                      <div key={msg.id}>
+                        <div className={`flex ${isAI ? "justify-end" : "justify-start"} mb-2`}>
+                          <div className="max-w-[75%]">
+                            {isAI && (
+                              <div className="text-xs text-gray-500 dark:text-gray-400 mb-1 text-right">
+                                AI Reply
+                              </div>
+                            )}
+                            <div
+                              className={`rounded-3xl px-4 py-3 text-sm shadow-sm ${
+                                isAI
+                                  ? "bg-emerald-600 text-white dark:bg-emerald-500"
+                                  : "bg-gray-100 text-gray-900 dark:bg-gray-700 dark:text-gray-100"
+                              }`}
+                            >
+                              {msg.text}
+                            </div>
+                            <div className={`mt-1 flex items-center gap-1 ${isAI ? "justify-end" : "justify-start"}`}>
+                              <span className="text-xs text-gray-400 dark:text-gray-500">
+                                {msg.timestamp}
+                              </span>
+                              {isAI && <MessageStatus status={msg.status} />}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Quick Reply Buttons */}
+                        {showQuickReplies && (
+                          <div className="flex flex-wrap gap-2 mb-4 justify-end">
+                            {msg.quickReplies!.map((reply, idx) => (
+                              <button
+                                key={idx}
+                                onClick={() => handleQuickReply(reply)}
+                                className="px-3 py-1.5 text-xs bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 rounded-full transition-colors"
+                              >
+                                {reply}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
+
+                  {/* Typing Indicator */}
+                  {isTyping && <TypingIndicator />}
+                </div>
+              )}
+            </div>
+
+            {/* Chat Footer (sticky) - only visible in Manual mode */}
+            {selectedLead && currentMode === "Manual" && (
+              <div className="sticky bottom-0 z-10 bg-white/95 dark:bg-gray-800/95 backdrop-blur border-t border-gray-200 dark:border-gray-700 p-3">
+                {/* Enter to Send Toggle */}
+                <div className="flex items-center justify-between mb-2">
+                  <label className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400">
+                    <input
+                      type="checkbox"
+                      checked={enterToSend}
+                      onChange={(e) => setEnterToSend(e.target.checked)}
+                      className="rounded"
+                    />
+                    Press Enter to send
+                  </label>
+                </div>
+
+                <div className="flex items-end gap-2">
+                  <button
+                    onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+                    className="p-2 rounded-md border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                    title="Emoji"
+                  >
+                    <Smile className="w-5 h-5" />
+                  </button>
+
+                  <button
+                    onClick={() => fileInputRef.current?.click()}
+                    className="p-2 rounded-md border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                    title="Upload file"
+                  >
+                    <Upload className="w-5 h-5" />
+                  </button>
+
+                  <button
+                    onClick={() => fileInputRef.current?.click()}
+                    className="p-2 rounded-md border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                    title="Upload image"
+                  >
+                    <Image className="w-5 h-5" />
+                  </button>
+
+                  <div className="flex-1">
+                    <textarea
+                      rows={1}
+                      value={draft}
+                      onChange={(e) => selectedLead && setDrafts((d) => ({ ...d, [selectedLead.id]: e.target.value }))}
+                      onKeyDown={handleKeyDown}
+                      placeholder="Type a message..."
+                      className="w-full resize-none rounded-lg bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-sm px-4 py-3 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                    />
+                  </div>
+
+                  <button
+                    onClick={handleSend}
+                    className="inline-flex items-center gap-2 px-4 py-3 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-sm disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    disabled={!draft.trim()}
+                  >
+                    <Send className="w-4 h-4" />
+                    Send
+                  </button>
+                </div>
+
+                {/* Hidden file input */}
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  className="hidden"
+                  accept="image/*,application/pdf,.doc,.docx,.txt"
+                  onChange={(e) => {
+                    // Handle file upload here
+                    console.log('File selected:', e.target.files?.[0])
+                  }}
+                />
+              </div>
+            )}
+          </section>
+        </div>
+      )}
+
+      {/* New Chat Modal */}
+      {showNewChatModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          {/* Backdrop */}
+          <div
+            className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+            onClick={() => setShowNewChatModal(false)}
+          />
+
+          {/* Modal Content */}
+          <div className="relative w-[85%] max-w-4xl max-h-[90vh] bg-white dark:bg-slate-900 rounded-2xl shadow-2xl flex flex-col">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-slate-700 flex-shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
+                  <Plus className="w-4 h-4 text-white" />
+                </div>
+                <h2 className="text-xl font-semibold text-gray-900 dark:text-white">Start New Chat</h2>
+              </div>
+              <button
+                onClick={() => setShowNewChatModal(false)}
+                className="p-2 rounded-lg text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-800 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Modal Body - Scrollable */}
+            <div className="flex-1 overflow-y-auto px-6 py-4">
+              <NewChatForm onClose={() => setShowNewChatModal(false)} onSubmit={createNewConversation} />
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// New Chat Form Component
+function NewChatForm({ onClose, onSubmit }: {
+  onClose: () => void
+  onSubmit: (formData: {
+    name: string
+    phone: string
+    email: string
+    channel: Channel
+    type: LeadType
+    message: string
+  }) => Promise<void>
+}) {
+  const [formData, setFormData] = useState({
+    name: '',
+    phone: '',
+    email: '',
+    channel: 'WhatsApp' as Channel,
+    type: 'Warm' as LeadType,
+    message: ''
+  })
+  const [isSubmitting, setIsSubmitting] = useState(false)
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (isSubmitting) return
+
+    setIsSubmitting(true)
+    try {
+      await onSubmit(formData)
+      onClose()
+    } catch (error) {
+      console.error('Failed to create conversation:', error)
+      // Could add error toast here
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  return (
+    <form onSubmit={handleSubmit}>
+      {/* Contact Information */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+            Contact Name *
+          </label>
+          <input
+            type="text"
+            required
+            value={formData.name}
+            onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
+            className="w-full px-4 py-3 rounded-lg border border-gray-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            placeholder="Enter contact name"
+          />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+            Phone Number *
+          </label>
+          <input
+            type="tel"
+            required
+            value={formData.phone}
+            onChange={(e) => setFormData(prev => ({ ...prev, phone: e.target.value }))}
+            className="w-full px-4 py-3 rounded-lg border border-gray-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            placeholder="+91 98765 43210"
+          />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+            Email (Optional)
+          </label>
+          <input
+            type="email"
+            value={formData.email}
+            onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
+            className="w-full px-4 py-3 rounded-lg border border-gray-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            placeholder="email@example.com"
+          />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+            Channel *
+          </label>
+          <select
+            value={formData.channel}
+            onChange={(e) => setFormData(prev => ({ ...prev, channel: e.target.value as Channel }))}
+            className="w-full px-4 py-3 rounded-lg border border-gray-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          >
+            <option value="WhatsApp">WhatsApp</option>
+            <option value="Instagram">Instagram</option>
+            <option value="Messenger">Messenger</option>
+            <option value="Email">Email</option>
+          </select>
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+            Lead Type
+          </label>
+          <select
+            value={formData.type}
+            onChange={(e) => setFormData(prev => ({ ...prev, type: e.target.value as LeadType }))}
+            className="w-full px-4 py-3 rounded-lg border border-gray-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          >
+            <option value="Hot">Hot</option>
+            <option value="Warm">Warm</option>
+            <option value="Cold">Cold</option>
+          </select>
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+            Initial Message (Optional)
+          </label>
+          <textarea
+            value={formData.message}
+            onChange={(e) => setFormData(prev => ({ ...prev, message: e.target.value }))}
+            rows={3}
+            className="w-full px-4 py-3 rounded-lg border border-gray-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+            placeholder="Start the conversation..."
+          />
+        </div>
+      </div>
+
+      <div className="flex items-center justify-end gap-3 mt-6 pt-6 border-t border-gray-200 dark:border-slate-700">
+        <button
+          type="button"
+          onClick={onClose}
+          className="px-6 py-2 text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors"
+        >
+          Cancel
+        </button>
+        <button
+          type="submit"
+          disabled={isSubmitting || !formData.name.trim() || !formData.phone.trim()}
+          className="px-6 py-2 bg-blue-500 hover:bg-blue-600 disabled:bg-gray-300 disabled:cursor-not-allowed text-white rounded-lg transition-colors"
+        >
+          {isSubmitting ? 'Creating...' : 'Create Chat'}
+        </button>
+      </div>
+    </form>
+  )
+}
+
+const MOCK_LEADS: Lead[] = [
+  {
+    id: "l1",
+    name: "Priya Sharma",
+    channel: "WhatsApp",
+    type: "Hot",
+    lastMessage: "Can you share pricing details?",
+    timestamp: "10:12 AM",
+    unreadCount: 3,
+    isOnline: true,
+  },
+  {
+    id: "l2",
+    name: "Rahul Mehta",
+    channel: "Instagram",
+    type: "Warm",
+    lastMessage: "Thanks! I will review it.",
+    timestamp: "Yesterday",
+    unreadCount: 0,
+    isOnline: false,
+    lastSeen: "2 hours ago",
+  },
+  {
+    id: "l3",
+    name: "Anita Desai",
+    channel: "Messenger",
+    type: "Cold",
+    lastMessage: "Is there a free trial?",
+    timestamp: "Mon",
+    unreadCount: 1,
+    isOnline: false,
+    lastSeen: "1 day ago",
+  },
+  {
+    id: "l4",
+    name: "John Carter",
+    channel: "Email",
+    type: "Warm",
+    lastMessage: "Received your proposal.",
+    timestamp: "Sun",
+    unreadCount: 0,
+    isOnline: true,
+  },
+]
+
+const MOCK_CONVERSATIONS: Record<string, ChatMessage[]> = {
+  l1: [
+    { id: "m1", author: "lead", text: "Hi, I'm interested in your AI agent.", timestamp: "10:05 AM", status: "read" },
+    { id: "m2", author: "ai", text: "Great! I can help with details. What use case do you have in mind?", timestamp: "10:06 AM", status: "read", quickReplies: ["Sales", "Support", "Marketing"] },
+    { id: "m3", author: "lead", text: "Sales inquiries handling.", timestamp: "10:08 AM", status: "read" },
+    { id: "m4", author: "ai", text: "Perfect. We support multi-channel, automation, and CRM sync.", timestamp: "10:09 AM", status: "delivered", quickReplies: ["Tell me more", "Pricing", "Demo"] },
+  ],
+  l2: [
+    { id: "m1", author: "lead", text: "Do you have a case study?", timestamp: "Yesterday", status: "read" },
+    { id: "m2", author: "ai", text: "Yes, sharing a summary now.", timestamp: "Yesterday", status: "read" },
+  ],
+  l3: [
+    { id: "m1", author: "lead", text: "Is there a free trial?", timestamp: "Mon", status: "read" },
+    { id: "m2", author: "ai", text: "We offer a 14-day trial with limited features.", timestamp: "Mon", status: "read", quickReplies: ["Start trial", "Learn more"] },
+  ],
+  l4: [
+    { id: "m1", author: "lead", text: "Thanks for the proposal.", timestamp: "Sun", status: "read" },
+  ],
+}
+
+function ChannelIcon({ channel }: { channel: Channel }) {
+  const common = "w-4 h-4"
+  switch (channel) {
+    case "WhatsApp":
+      return <Phone className={common} />
+    case "Instagram":
+      return <Instagram className={common} />
+    case "Messenger":
+      return <MessageCircle className={common} />
+    case "Email":
+      return <Mail className={common} />
+    default:
+      return null
+  }
+}
+
+function StatusBadge({ type }: { type: LeadType }) {
+  const cls =
+    type === "Hot"
+      ? "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300"
+      : type === "Warm"
+      ? "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300"
+      : "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300"
+  return (
+    <span className={`text-xs px-2 py-0.5 rounded-full ${cls}`} title={`${type} lead - ${getLeadTypeDescription(type)}`}>
+      {type}
+    </span>
+  )
+}
+
+function getLeadTypeDescription(type: LeadType): string {
+  switch (type) {
+    case "Hot": return "High interest, ready to buy"
+    case "Warm": return "Interested, needs nurturing"
+    case "Cold": return "Low interest, requires engagement"
+    default: return ""
+  }
+}
+
+function MessageStatus({ status }: { status?: "sent" | "delivered" | "read" }) {
+  if (!status) return null
+  
+  switch (status) {
+    case "sent":
+      return <Check className="w-3 h-3 text-gray-400" />
+    case "delivered":
+      return <CheckCheck className="w-3 h-3 text-gray-400" />
+    case "read":
+      return <CheckCheck className="w-3 h-3 text-blue-500" />
+    default:
+      return null
+  }
+}
+
+function OnlineIndicator({ isOnline, lastSeen }: { isOnline: boolean; lastSeen?: string }) {
+  if (isOnline) {
+    return <div className="w-2 h-2 bg-green-500 rounded-full" title="Online" />
+  }
+  
+  if (lastSeen) {
+    return <div className="w-2 h-2 bg-gray-400 rounded-full" title={`Last seen ${lastSeen}`} />
+  }
+  
+  return null
+}
+
+function FilterChip({ 
+  label, 
+  isSelected, 
+  onToggle, 
+  onRemove 
+}: { 
+  label: string
+  isSelected: boolean
+  onToggle: () => void
+  onRemove?: () => void
+}) {
+  return (
+    <button
+      onClick={onToggle}
+      className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium transition-colors ${
+        isSelected
+          ? "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300"
+          : "bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600"
+      }`}
+    >
+      {label}
+      {isSelected && onRemove && (
+        <X className="w-3 h-3 ml-1 cursor-pointer" onClick={(e) => { e.stopPropagation(); onRemove() }} />
+      )}
+    </button>
+  )
+}
+
+function DateSeparator({ date }: { date: string }) {
+  return (
+    <div className="flex items-center justify-center my-4">
+      <div className="bg-gray-100 dark:bg-gray-700 px-3 py-1 rounded-full">
+        <span className="text-xs text-gray-600 dark:text-gray-400">{date}</span>
+      </div>
+    </div>
+  )
+}
+
+function TypingIndicator() {
+  return (
+    <div className="flex justify-start mb-4">
+      <div className="max-w-[75%]">
+        <div className="bg-gray-100 dark:bg-gray-700 rounded-2xl px-4 py-2">
+          <div className="flex items-center space-x-1">
+            <div className="flex space-x-1">
+              <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
+              <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
+              <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
+            </div>
+            <span className="text-xs text-gray-500 ml-2">AI is typing...</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+export default function ChatsPage() {
+  // Filter states - now using arrays for multi-select
+  const [selectedChannels, setSelectedChannels] = useState<Channel[]>([])
+  const [selectedLeadTypes, setSelectedLeadTypes] = useState<LeadType[]>([])
+  const [handledFilter, setHandledFilter] = useState<"AI" | "Manual">("AI")
+  const [search, setSearch] = useState("")
+
+  // UI states
+  const [selectedLeadId, setSelectedLeadId] = useState<string | null>(MOCK_LEADS[0]?.id ?? null)
+  const [chatMode, setChatMode] = useState<Record<string, "AI" | "Manual">>({})
+  const [drafts, setDrafts] = useState<Record<string, string>>({})
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
+  const [isTyping, setIsTyping] = useState(false)
+  const [enterToSend, setEnterToSend] = useState(true)
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false)
+  const [showNewChatModal, setShowNewChatModal] = useState(false)
+
+  // Refs
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const chatBodyRef = useRef<HTMLDivElement>(null)
+
+  // Filter functions
+  const toggleChannelFilter = (channel: Channel) => {
+    setSelectedChannels(prev => 
+      prev.includes(channel) 
+        ? prev.filter(c => c !== channel)
+        : [...prev, channel]
+    )
+  }
+
+  const toggleLeadTypeFilter = (type: LeadType) => {
+    setSelectedLeadTypes(prev => 
+      prev.includes(type) 
+        ? prev.filter(t => t !== type)
+        : [...prev, type]
+    )
+  }
+
+  const clearAllFilters = () => {
+    setSelectedChannels([])
+    setSelectedLeadTypes([])
+    setSearch("")
+  }
+
+  const leads = useMemo(() => {
+    return MOCK_LEADS.filter((l) => {
+      const channelOk = selectedChannels.length === 0 || selectedChannels.includes(l.channel)
+      const typeOk = selectedLeadTypes.length === 0 || selectedLeadTypes.includes(l.type)
+      const searchOk = !search ||
+        l.name.toLowerCase().includes(search.toLowerCase()) ||
+        l.lastMessage.toLowerCase().includes(search.toLowerCase())
+      return channelOk && typeOk && searchOk
+    })
+  }, [selectedChannels, selectedLeadTypes, search])
+
+  const selectedLead = useMemo(() => 
+    leads.find((l) => l.id === selectedLeadId) || MOCK_LEADS.find(l => l.id === selectedLeadId) || null, 
+    [leads, selectedLeadId]
+  )
+  
+  const messages: ChatMessage[] = useMemo(() => {
+    if (!selectedLeadId) return []
+    return MOCK_CONVERSATIONS[selectedLeadId] || []
+  }, [selectedLeadId])
+
+  const currentMode: "AI" | "Manual" = selectedLeadId ? chatMode[selectedLeadId] || handledFilter : handledFilter
+  const draft = selectedLeadId ? drafts[selectedLeadId] || "" : ""
+
+  // Simulate typing indicator
+  useEffect(() => {
+    if (currentMode === "AI" && messages.length > 0) {
+      const lastMessage = messages[messages.length - 1]
+      if (lastMessage.author === "lead") {
+        setIsTyping(true)
+        const timer = setTimeout(() => setIsTyping(false), 2000)
+        return () => clearTimeout(timer)
+      }
+    }
+  }, [messages, currentMode])
+
+  // Auto-scroll to bottom
+  useEffect(() => {
+    if (chatBodyRef.current) {
+      chatBodyRef.current.scrollTop = chatBodyRef.current.scrollHeight
+    }
+  }, [messages, isTyping])
+
+  const handleSend = () => {
+    if (!selectedLeadId || !draft.trim()) return
+    
+    // Add message to conversation
+    MOCK_CONVERSATIONS[selectedLeadId] = [
+      ...(MOCK_CONVERSATIONS[selectedLeadId] || []),
+      {
+        id: Math.random().toString(36).slice(2),
+        author: "ai",
+        text: draft.trim(),
+        timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+        status: "sent",
+      },
+    ]
+    setDrafts((d) => ({ ...d, [selectedLeadId]: "" }))
+  }
+
+  const handleQuickReply = (reply: string) => {
+    if (!selectedLeadId) return
+    
+    MOCK_CONVERSATIONS[selectedLeadId] = [
+      ...(MOCK_CONVERSATIONS[selectedLeadId] || []),
+      {
+        id: Math.random().toString(36).slice(2),
+        author: "lead",
+        text: reply,
+        timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+        status: "read",
+      },
+    ]
+  }
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (enterToSend && e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault()
+      handleSend()
+    }
+  }
+
+  return (
+    <div className="space-y-4">
+      {/* Compact Page Header */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-purple-600 dark:from-blue-600 dark:to-purple-700 flex items-center justify-center shadow-lg">
+            <MessageCircle className="w-5 h-5 text-white" />
+          </div>
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Chats</h1>
+            <p className="text-sm text-gray-500 dark:text-gray-400">Live conversations</p>
+          </div>
+        </div>
+        
+        <div className="flex items-center gap-3">
+          {/* New Chat Button */}
+          <button
+            onClick={() => setShowNewChatModal(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white rounded-lg shadow-lg transition-all duration-200 hover:shadow-xl"
+          >
+            <Plus className="w-4 h-4" />
+            <span className="hidden sm:inline">New Chat</span>
+          </button>
+          
+          {/* Sidebar Toggle */}
+          <button
+            onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+            className="lg:hidden p-2 rounded-lg border border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
+          >
+            {sidebarCollapsed ? <ChevronRight className="w-5 h-5" /> : <ChevronLeft className="w-5 h-5" />}
+          </button>
+        </div>
+      </div>
+
+      {/* Two-column layout container */}
+      <div className={`grid gap-4 h-[calc(100vh-11rem)] overflow-hidden ${
+        sidebarCollapsed ? 'grid-cols-1' : 'grid-cols-1 lg:grid-cols-3'
+      }`}>
+        {/* Left Sidebar */}
+        {!sidebarCollapsed && (
+          <aside className="lg:col-span-1 bg-white dark:bg-gray-900/50 border border-gray-200 dark:border-gray-700/50 rounded-xl flex flex-col overflow-hidden backdrop-blur-sm">
+            {/* Filters and Search */}
+            <div className="p-2 border-b border-gray-200 dark:border-gray-700 space-y-2">
+              {/* Search */}
+              <div className="relative">
+                <input
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Search leads..."
+                  className="w-full pl-9 pr-3 py-2 rounded-md bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-sm text-gray-900 dark:text-gray-100"
+                />
+                <Search className="w-4 h-4 absolute left-3 top-2.5 text-gray-400" />
+              </div>
+
+              {/* Channel Filters */}
+              <div>
+                <label className="text-xs text-gray-500 dark:text-gray-400 mb-2 block">Channels</label>
+                <div className="flex flex-wrap gap-1">
+                  {(["WhatsApp", "Instagram", "Messenger", "Email"] as Channel[]).map(channel => (
+                    <FilterChip
+                      key={channel}
+                      label={channel}
+                      isSelected={selectedChannels.includes(channel)}
+                      onToggle={() => toggleChannelFilter(channel)}
+                      onRemove={() => toggleChannelFilter(channel)}
+                    />
+                  ))}
+                </div>
+              </div>
+
+              {/* Lead Type Filters */}
+              <div>
+                <label className="text-xs text-gray-500 dark:text-gray-400 mb-2 block">Lead Types</label>
+                <div className="flex flex-wrap gap-1">
+                  {(["Hot", "Warm", "Cold"] as LeadType[]).map(type => (
+                    <FilterChip
+                      key={type}
+                      label={type}
+                      isSelected={selectedLeadTypes.includes(type)}
+                      onToggle={() => toggleLeadTypeFilter(type)}
+                      onRemove={() => toggleLeadTypeFilter(type)}
+                    />
+                  ))}
+                </div>
+              </div>
+
+              {/* Clear Filters */}
+              {(selectedChannels.length > 0 || selectedLeadTypes.length > 0 || search) && (
+                <button
+                  onClick={clearAllFilters}
+                  className="text-xs text-blue-500 hover:text-blue-700 dark:hover:text-blue-300 underline w-full text-center"
+                >
+                  Clear all filters
+                </button>
+              )}
+            </div>
+
+            {/* Lead List */}
+            <div className="flex-1 overflow-y-auto">
+              <ul className="divide-y divide-gray-200 dark:divide-gray-700">
+                {leads.map((lead) => (
+                  <li
+                    key={lead.id}
+                    onClick={() => setSelectedLeadId(lead.id)}
+                    className={`p-3 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-900 transition-colors ${
+                      selectedLeadId === lead.id ? "bg-blue-50 dark:bg-blue-900/20 border-r-2 border-blue-500" : ""
+                    }`}
+                  >
+                    <div className="flex items-start gap-3">
+                      <div className="relative mt-0.5">
+                        <div className="w-8 h-8 rounded-full bg-gray-100 dark:bg-gray-700 flex items-center justify-center">
+                          <ChannelIcon channel={lead.channel} />
+                        </div>
+                        <div className="absolute -bottom-1 -right-1">
+                          <OnlineIndicator isOnline={lead.isOnline} lastSeen={lead.lastSeen} />
+                        </div>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <p className="font-medium text-gray-900 dark:text-gray-100 truncate">{lead.name}</p>
+                            {lead.unreadCount > 0 && (
+                              <span className="bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
+                                {lead.unreadCount}
+                              </span>
+                            )}
+                          </div>
+                          <span className="text-xs text-gray-400 dark:text-gray-500 ml-2 shrink-0">{lead.timestamp}</span>
+                        </div>
+                        <div className="mt-1 flex items-center gap-2">
+                          <StatusBadge type={lead.type} />
+                          <span className="text-sm text-gray-600 dark:text-gray-400 truncate">{lead.lastMessage}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </li>
+                ))}
+                {leads.length === 0 && (
+                  <li className="p-6 text-center text-sm text-gray-500 dark:text-gray-400">
+                    No leads match your filters.
+                  </li>
+                )}
+              </ul>
+            </div>
+          </aside>
+        )}
+
+        {/* Right Chat Window */}
+        <section className={`bg-white dark:bg-gray-900/50 border border-gray-200 dark:border-gray-700/50 rounded-xl flex flex-col overflow-hidden backdrop-blur-sm ${
+          sidebarCollapsed ? 'col-span-1' : 'lg:col-span-2'
+        }`}>
+          {/* Chat Header (sticky) */}
+          <div className="sticky top-0 z-10 bg-white/95 dark:bg-gray-800/95 backdrop-blur border-b border-gray-200 dark:border-gray-700 p-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                {sidebarCollapsed && (
+                  <button
+                    onClick={() => setSidebarCollapsed(false)}
+                    className="p-1 rounded-md text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
+                  >
+                    <ChevronRight className="w-5 h-5" />
+                  </button>
+                )}
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+                      {selectedLead?.name || "Select a lead"}
+                    </h2>
+                    {selectedLead && (
+                      <OnlineIndicator isOnline={selectedLead.isOnline} lastSeen={selectedLead.lastSeen} />
+                    )}
+                  </div>
+                  {selectedLead && (
+                    <div className="flex items-center gap-2 mt-1 text-xs text-gray-500 dark:text-gray-400">
+                      <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-gray-100 dark:bg-gray-700">
+                        <ChannelIcon channel={selectedLead.channel} />
+                        <span>{selectedLead.channel}</span>
+                      </div>
+                      <StatusBadge type={selectedLead.type} />
+                      {!selectedLead.isOnline && selectedLead.lastSeen && (
+                        <span>Last seen {selectedLead.lastSeen}</span>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {selectedLead && (
+                <div className="inline-flex rounded-md overflow-hidden border border-gray-200 dark:border-gray-700">
+                  <button
+                    className={`px-3 py-1.5 text-xs transition-colors ${
+                      currentMode === "AI" 
+                        ? "bg-gray-900 text-white dark:bg-gray-100 dark:text-gray-900" 
+                        : "bg-transparent text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
+                    }`}
+                    onClick={() => setChatMode((m) => ({ ...m, [selectedLead.id]: "AI" }))}
+                  >
+                    AI-handled
+                  </button>
+                  <button
+                    className={`px-3 py-1.5 text-xs transition-colors ${
+                      currentMode === "Manual" 
+                        ? "bg-gray-900 text-white dark:bg-gray-100 dark:text-gray-900" 
+                        : "bg-transparent text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
+                    }`}
+                    onClick={() => setChatMode((m) => ({ ...m, [selectedLead.id]: "Manual" }))}
+                  >
+                    Manual
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Chat Body - independent scroll */}
+          <div ref={chatBodyRef} className="flex-1 overflow-y-auto p-3 space-y-3">
+            {!selectedLead && (
+              <div className="h-full flex items-center justify-center text-gray-500 dark:text-gray-400">
+                <div className="text-center">
+                  <MessageCircle className="w-12 h-12 mx-auto mb-4 text-gray-300 dark:text-gray-600" />
+                  <p>Select a lead from the sidebar to view messages</p>
+                </div>
+              </div>
+            )}
+
+            {selectedLead && (
+              <div className="space-y-2">
+                <DateSeparator date="Today" />
+                
+                {messages.map((msg, index) => {
+                  const isAI = msg.author === "ai"
+                  const showQuickReplies = isAI && msg.quickReplies && index === messages.length - 1
+                  
+                  return (
+                    <div key={msg.id}>
+                      <div className={`flex ${isAI ? "justify-end" : "justify-start"} mb-2`}>
+                        <div className="max-w-[75%]">
+                          {isAI && (
+                            <div className="text-xs text-gray-500 dark:text-gray-400 mb-1 text-right">
+                              AI Reply
+                            </div>
+                          )}
+                          <div
+                            className={`rounded-3xl px-4 py-3 text-sm shadow-sm ${
+                              isAI
+                                ? "bg-emerald-600 text-white dark:bg-emerald-500"
+                                : "bg-gray-100 text-gray-900 dark:bg-gray-700 dark:text-gray-100"
+                            }`}
+                          >
+                            {msg.text}
+                          </div>
+                          <div className={`mt-1 flex items-center gap-1 ${isAI ? "justify-end" : "justify-start"}`}>
+                            <span className="text-xs text-gray-400 dark:text-gray-500">
+                              {msg.timestamp}
+                            </span>
+                            {isAI && <MessageStatus status={msg.status} />}
+                          </div>
+                        </div>
+                      </div>
+                      
+                      {/* Quick Reply Buttons */}
+                      {showQuickReplies && (
+                        <div className="flex flex-wrap gap-2 mb-4 justify-end">
+                          {msg.quickReplies!.map((reply, idx) => (
+                            <button
+                              key={idx}
+                              onClick={() => handleQuickReply(reply)}
+                              className="px-3 py-1.5 text-xs bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 rounded-full transition-colors"
+                            >
+                              {reply}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
+                
+                {/* Typing Indicator */}
+                {isTyping && <TypingIndicator />}
+              </div>
+            )}
+          </div>
+
+          {/* Chat Footer (sticky) - only visible in Manual mode */}
+          {selectedLead && currentMode === "Manual" && (
+            <div className="sticky bottom-0 z-10 bg-white/95 dark:bg-gray-800/95 backdrop-blur border-t border-gray-200 dark:border-gray-700 p-3">
+              {/* Enter to Send Toggle */}
+              <div className="flex items-center justify-between mb-2">
+                <label className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400">
+                  <input
+                    type="checkbox"
+                    checked={enterToSend}
+                    onChange={(e) => setEnterToSend(e.target.checked)}
+                    className="rounded"
+                  />
+                  Press Enter to send
+                </label>
+              </div>
+              
+              <div className="flex items-end gap-2">
+                <button
+                  onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+                  className="p-2 rounded-md border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                  title="Emoji"
+                >
+                  <Smile className="w-5 h-5" />
+                </button>
+                
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  className="p-2 rounded-md border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                  title="Upload file"
+                >
+                  <Upload className="w-5 h-5" />
+                </button>
+                
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  className="p-2 rounded-md border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                  title="Upload image"
+                >
+                  <Image className="w-5 h-5" />
+                </button>
+                
+                <div className="flex-1">
+                  <textarea
+                    rows={1}
+                    value={draft}
+                    onChange={(e) => selectedLead && setDrafts((d) => ({ ...d, [selectedLead.id]: e.target.value }))}
+                    onKeyDown={handleKeyDown}
+                    placeholder="Type a message..."
+                    className="w-full resize-none rounded-lg bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-sm px-4 py-3 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                  />
+                </div>
+                
+                <button
+                  onClick={handleSend}
+                  className="inline-flex items-center gap-2 px-4 py-3 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-sm disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  disabled={!draft.trim()}
+                >
+                  <Send className="w-4 h-4" />
+                  Send
+                </button>
+              </div>
+              
+              {/* Hidden file input */}
+              <input
+                ref={fileInputRef}
+                type="file"
+                className="hidden"
+                accept="image/*,application/pdf,.doc,.docx,.txt"
+                onChange={(e) => {
+                  // Handle file upload here
+                  console.log('File selected:', e.target.files?.[0])
+                }}
+              />
+            </div>
+          )}
+        </section>
+      </div>
+
+      {/* New Chat Modal */}
+      {showNewChatModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          {/* Backdrop */}
+          <div 
+            className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+            onClick={() => setShowNewChatModal(false)}
+          />
+          
+          {/* Modal Content */}
+          <div className="relative w-[85%] max-w-4xl max-h-[90vh] bg-white dark:bg-slate-900 rounded-2xl shadow-2xl flex flex-col">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-slate-700 flex-shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
+                  <Plus className="w-4 h-4 text-white" />
+                </div>
+                <h2 className="text-xl font-semibold text-gray-900 dark:text-white">Start New Chat</h2>
+              </div>
+              <button
+                onClick={() => setShowNewChatModal(false)}
+                className="p-2 rounded-lg text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-800 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Modal Body - Scrollable */}
+            <div className="flex-1 overflow-y-auto px-6 py-4">
+              <NewChatForm onClose={() => setShowNewChatModal(false)} />
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// New Chat Form Component
+function NewChatForm({ onClose }: { onClose: () => void }) {
+  const [formData, setFormData] = useState({
+    name: '',
+    phone: '',
+    email: '',
+    channel: 'WhatsApp' as Channel,
+    type: 'Warm' as LeadType,
+    message: ''
+  })
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+    
+    // Create new lead and add to mock data
+    const newLead: Lead = {
+      id: `l${Date.now()}`,
+      name: formData.name,
+      channel: formData.channel,
+      type: formData.type,
+      lastMessage: formData.message || "New conversation started",
+      timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+      unreadCount: formData.message ? 1 : 0,
+      isOnline: true,
+    }
+
+    // Add to mock leads
+    MOCK_LEADS.unshift(newLead)
+
+    // Create initial conversation if message provided
+    if (formData.message) {
+      MOCK_CONVERSATIONS[newLead.id] = [
+        {
+          id: Math.random().toString(36).slice(2),
+          author: "lead",
+          text: formData.message,
+          timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+          status: "read",
+        }
+      ]
+    }
+
+    // Close modal and show success
+    onClose()
+    
+    // Optional: Select the new chat
+    // setSelectedLeadId(newLead.id)
+  }
+
+  return (
+    <form onSubmit={handleSubmit}>
+      {/* Contact Information */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+            Contact Name *
+          </label>
+          <input
+            type="text"
+            required
+            value={formData.name}
+            onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
+            className="w-full px-4 py-3 rounded-lg border border-gray-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            placeholder="Enter contact name"
+          />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+            Phone Number *
+          </label>
+          <input
+            type="tel"
+            required
+            value={formData.phone}
+            onChange={(e) => setFormData(prev => ({ ...prev, phone: e.target.value }))}
+            className="w-full px-4 py-3 rounded-lg border border-gray-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            placeholder="+91 98765 43210"
+          />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+            Email (Optional)
+          </label>
+          <input
+            type="email"
+            value={formData.email}
+            onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
+            className="w-full px-4 py-3 rounded-lg border border-gray-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            placeholder="contact@example.com"
+          />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+            Channel
+          </label>
+          <select
+            value={formData.channel}
+            onChange={(e) => setFormData(prev => ({ ...prev, channel: e.target.value as Channel }))}
+            className="w-full px-4 py-3 rounded-lg border border-gray-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          >
+            <option value="WhatsApp">WhatsApp</option>
+            <option value="Instagram">Instagram</option>
+            <option value="Messenger">Messenger</option>
+            <option value="Email">Email</option>
+          </select>
+        </div>
+      </div>
+
+      {/* Lead Type */}
+      <div className="mt-6">
+        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
+          Lead Type
+        </label>
+        <div className="flex gap-3">
+          {(["Hot", "Warm", "Cold"] as LeadType[]).map(type => (
+            <button
+              key={type}
+              type="button"
+              onClick={() => setFormData(prev => ({ ...prev, type }))}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                formData.type === type
+                  ? type === "Hot"
+                    ? "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300"
+                    : type === "Warm"
+                    ? "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300"
+                    : "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300"
+                  : "bg-gray-100 text-gray-700 dark:bg-slate-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-slate-600"
+              }`}
+            >
+              {type}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Initial Message */}
+      <div className="mt-6">
+        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+          Initial Message (Optional)
+        </label>
+        <textarea
+          rows={4}
+          value={formData.message}
+          onChange={(e) => setFormData(prev => ({ ...prev, message: e.target.value }))}
+          className="w-full px-4 py-3 rounded-lg border border-gray-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+          placeholder="Enter the first message from this contact..."
+        />
+      </div>
+
+      {/* Action Buttons */}
+      <div className="flex items-center justify-end gap-3 pt-4 mt-6 border-t border-gray-200 dark:border-slate-700">
+        <button
+          type="button"
+          onClick={onClose}
+          className="px-6 py-2 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 transition-colors"
+        >
+          Cancel
+        </button>
+        <button
+          type="submit"
+          className="px-6 py-2 bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white rounded-lg shadow-lg transition-all duration-200 hover:shadow-xl"
+        >
+          Start Chat
+        </button>
+      </div>
+    </form>
+  )
+}
